@@ -18,29 +18,28 @@ from telegram.ext import (
     filters,
 )
 
-# ─── Монкей-патч для APScheduler и tzlocal ──────────────────────────────────
+# ─── «Монкей-патч» для tzlocal/APSscheduler ────────────────────────────────
 _LOCAL_TZ = pytz.timezone("Europe/Vienna")
-apscheduler.util.astimezone    = lambda obj=None, tz=None: _LOCAL_TZ
-apscheduler.util.get_localzone = lambda: _LOCAL_TZ
-tzlocal.get_localzone          = lambda: _LOCAL_TZ
+apscheduler.util.astimezone     = lambda obj=None, tz=None: _LOCAL_TZ
+apscheduler.util.get_localzone  = lambda: _LOCAL_TZ
+tzlocal.get_localzone           = lambda: _LOCAL_TZ
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Настройка логирования ───────────────────────────────────────
+# ───────────── Логи ─────────────────────────────────────────────────────────
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Конфиг Google Sheets ────────────────────────────────────────
-CREDENTIALS_FILE = "credentials.json"  # файл вашего сервисного аккаунта
-SHEET_NAME       = "Финансы"           # имя Google Sheets
+# ───────────── Google Sheets ────────────────────────────────────────────────
+CREDENTIALS_FILE = "credentials.json"
+SHEET_NAME       = "Финансы"
 
 def connect_to_sheet():
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/drive"
     ]
     creds  = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
     client = gspread.authorize(creds)
@@ -51,17 +50,15 @@ def add_transaction(sheet, date, bank, category, amount, comment=""):
     sheet.append_row(row)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Состояния ConversationHandler ──────────────────────────────
+# ───────────── Состояния ────────────────────────────────────────────────────
 DATE, BANK, CATEGORY, AMOUNT, COMMENT = range(5)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Варианты банков и категорий ─────────────────────────────────
 BANKS = [
     "Озон", "Альфа", "Яндекс", "Озон рассрочка", "Наличные",
     "Тинькофф Соня", "Тинькофф кредитка Соня", "Озон Соня",
     "Сбер Соня", "Сбер Кредит Соня", "USDT", "USD"
 ]
-
 CATEGORIES = [
     "Еда", "Развлечения", "Кафе, рестораны", "Интернет", "Мобильная связь",
     "Подарки", "Общественный транспорт", "Такси", "Стоматолог", "Комиссия",
@@ -80,7 +77,7 @@ def chunk(lst, n):
         yield lst[i:i+n]
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Хендлеры ────────────────────────────────────────────────────
+# ───────────── Хендлеры ─────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Привет! Я готов записывать твои личные финансы.")
@@ -98,12 +95,11 @@ async def handle_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         try:
             day, month = map(int, text.split("."))
             dt = datetime(datetime.now().year, month, day)
-        except Exception:
+        except:
             return await update.message.reply_text(
                 "Неверный формат. Введи «Сегодня» или ДД.MM (например, 21.05):"
             )
     context.user_data["date"] = dt.strftime("%Y-%m-%d")
-
     await update.message.reply_text(
         f"Дата: {context.user_data['date']}\nВыбери банк:",
         reply_markup=ReplyKeyboardMarkup([[b] for b in BANKS], one_time_keyboard=True, resize_keyboard=True)
@@ -115,7 +111,6 @@ async def handle_bank(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     if choice not in BANKS:
         return await update.message.reply_text("Пожалуйста, выбери банк кнопкой.")
     context.user_data["bank"] = choice
-
     kb = list(chunk(CATEGORIES, 4))
     await update.message.reply_text(
         f"Банк: {choice}\nКакая категория?",
@@ -128,7 +123,6 @@ async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if cat not in CATEGORIES:
         return await update.message.reply_text("Пожалуйста, выбери категорию кнопкой.")
     context.user_data["category"] = cat
-
     await update.message.reply_text(
         f"Категория: {cat}\nТеперь введи сумму (только число):",
         reply_markup=ReplyKeyboardRemove()
@@ -139,10 +133,9 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     text = update.message.text.strip()
     try:
         amt = float(text)
-    except ValueError:
+    except:
         return await update.message.reply_text("Нужно ввести число. Попробуй ещё раз:")
     context.user_data["amount"] = amt
-
     await update.message.reply_text(
         "Есть комментарий?",
         reply_markup=ReplyKeyboardMarkup([["Нет"]], one_time_keyboard=True, resize_keyboard=True)
@@ -187,12 +180,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ───────────── Entry Point & Webhook ────────────────────────────────────────
 
 def main():
-    # читаем токен и URL из переменных окружения
+    # 1) читаем из окружения
     TOKEN       = os.environ["TELEGRAM_TOKEN"]
-    WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # например: https://your-service.a.run.app/webhook
+    WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
+    # 2) создаём приложение и регистрируем ConversationHandler
     app = ApplicationBuilder().token(TOKEN).build()
-
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -207,7 +200,7 @@ def main():
     )
     app.add_handler(conv)
 
-    # запускаем webhook-сервер
+    # 3) запускаем HTTP-сервер под webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", "8080")),
