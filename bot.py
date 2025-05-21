@@ -187,7 +187,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ───────────── Entry Point & Webhook ───────────────────────────────────────
 
 def main():
-    TOKEN       = os.environ["7377341728:AAGDTD6jNxqnPVg6m8hgPmsaSVh_XVScdXA"]
+    TOKEN       = os.environ["TELEGRAM_TOKEN"]
     WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # e.g. https://finance-bot-xyz.a.run.app/webhook
 
     app = ApplicationBuilder().token(TOKEN).build()
