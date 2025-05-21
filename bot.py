@@ -3,17 +3,11 @@
 import os
 import logging
 from datetime import datetime
+
 import pytz, tzlocal, apscheduler.util
-
-# ─── Монкей-патч для APScheduler и tzlocal ─────────────────────────────────
-_LOCAL_TZ = pytz.timezone("Europe/Vienna")
-apscheduler.util.astimezone     = lambda obj=None, tz=None: _LOCAL_TZ
-apscheduler.util.get_localzone  = lambda: _LOCAL_TZ
-tzlocal.get_localzone           = lambda: _LOCAL_TZ
-# ────────────────────────────────────────────────────────────────────────────
-
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -24,15 +18,24 @@ from telegram.ext import (
     filters,
 )
 
-# ───────────── Настройки логирования ────────────────────────────────────────
+# ─── Монкей-патч для APScheduler и tzlocal ──────────────────────────────────
+_LOCAL_TZ = pytz.timezone("Europe/Vienna")
+apscheduler.util.astimezone    = lambda obj=None, tz=None: _LOCAL_TZ
+apscheduler.util.get_localzone = lambda: _LOCAL_TZ
+tzlocal.get_localzone          = lambda: _LOCAL_TZ
+# ────────────────────────────────────────────────────────────────────────────
+
+# ───────────── Настройка логирования ───────────────────────────────────────
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+# ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Настройки Google Sheets ─────────────────────────────────────
-CREDENTIALS_FILE = "credentials.json"
-SHEET_NAME       = "Финансы"
+# ───────────── Конфиг Google Sheets ────────────────────────────────────────
+CREDENTIALS_FILE = "credentials.json"  # файл вашего сервисного аккаунта
+SHEET_NAME       = "Финансы"           # имя Google Sheets
 
 def connect_to_sheet():
     scope = [
@@ -46,17 +49,19 @@ def connect_to_sheet():
 def add_transaction(sheet, date, bank, category, amount, comment=""):
     row = [date, bank, category, amount, comment]
     sheet.append_row(row)
+# ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Состояния для ConversationHandler ──────────────────────────
+# ───────────── Состояния ConversationHandler ──────────────────────────────
 DATE, BANK, CATEGORY, AMOUNT, COMMENT = range(5)
+# ────────────────────────────────────────────────────────────────────────────
 
-BANKS = [  # ваш список банков
+# ───────────── Варианты банков и категорий ─────────────────────────────────
+BANKS = [
     "Озон", "Альфа", "Яндекс", "Озон рассрочка", "Наличные",
     "Тинькофф Соня", "Тинькофф кредитка Соня", "Озон Соня",
     "Сбер Соня", "Сбер Кредит Соня", "USDT", "USD"
 ]
 
-# ───────────── СПИСОК КАТЕГОРИЙ ───────────────────────────────────────────
 CATEGORIES = [
     "Еда", "Развлечения", "Кафе, рестораны", "Интернет", "Мобильная связь",
     "Подарки", "Общественный транспорт", "Такси", "Стоматолог", "Комиссия",
@@ -69,43 +74,39 @@ CATEGORIES = [
     "Зарплата Сони", "Доход Шокусь", "Фриланс", "Возврат", "Кешбэк",
     "Кредит", "Инвестиции", "Прочее IN", "Перевод"
 ]
-# ───────────────────────────────────────────────────────────────────────────
+
 def chunk(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i+n]
+# ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Handlers ────────────────────────────────────────────────────
+# ───────────── Хендлеры ────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(
-        "Привет! Я готов записывать твои личные финансы."
-    )
+    await update.message.reply_text("Привет! Я готов записывать твои личные финансы.")
     await update.message.reply_text(
         "Введите дату операции:",
-        reply_markup=ReplyKeyboardMarkup(
-            [["Сегодня"]], one_time_keyboard=True, resize_keyboard=True
-        )
+        reply_markup=ReplyKeyboardMarkup([["Сегодня"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return DATE
 
 async def handle_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    txt = update.message.text.strip()
-    if txt == "Сегодня":
+    text = update.message.text.strip()
+    if text == "Сегодня":
         dt = datetime.now(_LOCAL_TZ)
     else:
         try:
-            day, month = map(int, txt.split("."))
+            day, month = map(int, text.split("."))
             dt = datetime(datetime.now().year, month, day)
-        except:
+        except Exception:
             return await update.message.reply_text(
                 "Неверный формат. Введи «Сегодня» или ДД.MM (например, 21.05):"
             )
     context.user_data["date"] = dt.strftime("%Y-%m-%d")
+
     await update.message.reply_text(
         f"Дата: {context.user_data['date']}\nВыбери банк:",
-        reply_markup=ReplyKeyboardMarkup(
-            [[b] for b in BANKS], one_time_keyboard=True, resize_keyboard=True
-        )
+        reply_markup=ReplyKeyboardMarkup([[b] for b in BANKS], one_time_keyboard=True, resize_keyboard=True)
     )
     return BANK
 
@@ -114,6 +115,7 @@ async def handle_bank(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     if choice not in BANKS:
         return await update.message.reply_text("Пожалуйста, выбери банк кнопкой.")
     context.user_data["bank"] = choice
+
     kb = list(chunk(CATEGORIES, 4))
     await update.message.reply_text(
         f"Банк: {choice}\nКакая категория?",
@@ -126,6 +128,7 @@ async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if cat not in CATEGORIES:
         return await update.message.reply_text("Пожалуйста, выбери категорию кнопкой.")
     context.user_data["category"] = cat
+
     await update.message.reply_text(
         f"Категория: {cat}\nТеперь введи сумму (только число):",
         reply_markup=ReplyKeyboardRemove()
@@ -133,23 +136,22 @@ async def handle_category(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return AMOUNT
 
 async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    txt = update.message.text.strip()
+    text = update.message.text.strip()
     try:
-        amt = float(txt)
-    except:
+        amt = float(text)
+    except ValueError:
         return await update.message.reply_text("Нужно ввести число. Попробуй ещё раз:")
     context.user_data["amount"] = amt
+
     await update.message.reply_text(
         "Есть комментарий?",
-        reply_markup=ReplyKeyboardMarkup(
-            [["Нет"]], one_time_keyboard=True, resize_keyboard=True
-        )
+        reply_markup=ReplyKeyboardMarkup([["Нет"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return COMMENT
 
 async def handle_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    txt = update.message.text.strip()
-    comment = "" if txt == "Нет" else txt
+    text = update.message.text.strip()
+    comment = "" if text == "Нет" else text
     context.user_data["comment"] = comment
 
     sheet = connect_to_sheet()
@@ -169,26 +171,25 @@ async def handle_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         f"Банк: {data['bank']}\n"
         f"Категория: {data['category']}\n"
         f"Сумма: {data['amount']}\n"
-        f"Комментарий: {data['comment'] or '—'}\n\n"
+        f"Комментарий: {comment or '—'}\n\n"
         "Присылай следующую операцию — введите дату:",
-        reply_markup=ReplyKeyboardMarkup(
-            [["Сегодня"]], one_time_keyboard=True, resize_keyboard=True
-        )
+        reply_markup=ReplyKeyboardMarkup([["Сегодня"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return DATE
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
-        "Отменено. Начни заново /start",
+        "Отменено. Начни заново командой /start",
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
 
-# ───────────── Entry Point & Webhook ───────────────────────────────────────
+# ───────────── Entry Point & Webhook ────────────────────────────────────────
 
 def main():
+    # читаем токен и URL из переменных окружения
     TOKEN       = os.environ["TELEGRAM_TOKEN"]
-    WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # e.g. https://finance-bot-xyz.a.run.app/webhook
+    WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # например: https://your-service.a.run.app/webhook
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -202,15 +203,16 @@ def main():
             COMMENT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_comment)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True,
+        allow_reentry=True
     )
     app.add_handler(conv)
 
+    # запускаем webhook-сервер
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", "8080")),
-        webhook_url_path="/webhook",
-        webhook_url=os.environ["WEBHOOK_URL"],
+        url_path="/webhook",
+        webhook_url=WEBHOOK_URL
     )
 
 if __name__ == "__main__":
