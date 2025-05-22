@@ -18,28 +18,29 @@ from telegram.ext import (
     filters,
 )
 
-# ─── «Монкей-патч» для tzlocal/APSscheduler ────────────────────────────────
+# ─── Монкей-патч для APScheduler и tzlocal ────────────────────────────────
 _LOCAL_TZ = pytz.timezone("Europe/Vienna")
 apscheduler.util.astimezone     = lambda obj=None, tz=None: _LOCAL_TZ
 apscheduler.util.get_localzone  = lambda: _LOCAL_TZ
 tzlocal.get_localzone           = lambda: _LOCAL_TZ
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Логи ─────────────────────────────────────────────────────────
+# ───────────── Логирование ─────────────────────────────────────────────────
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Google Sheets ────────────────────────────────────────────────
+# ───────────── Google Sheets ───────────────────────────────────────────────
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME       = "Финансы"
 
 def connect_to_sheet():
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
+        "https://www.googleapis.com/auth/drive",
     ]
     creds  = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
     client = gspread.authorize(creds)
@@ -50,7 +51,7 @@ def add_transaction(sheet, date, bank, category, amount, comment=""):
     sheet.append_row(row)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Состояния ────────────────────────────────────────────────────
+# ───────────── ConversationHandler States ─────────────────────────────────
 DATE, BANK, CATEGORY, AMOUNT, COMMENT = range(5)
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ BANKS = [
     "Тинькофф Соня", "Тинькофф кредитка Соня", "Озон Соня",
     "Сбер Соня", "Сбер Кредит Соня", "USDT", "USD"
 ]
+
 CATEGORIES = [
     "Еда", "Развлечения", "Кафе, рестораны", "Интернет", "Мобильная связь",
     "Подарки", "Общественный транспорт", "Такси", "Стоматолог", "Комиссия",
@@ -77,7 +79,7 @@ def chunk(lst, n):
         yield lst[i:i+n]
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Хендлеры ─────────────────────────────────────────────────────
+# ───────────── Handlers ────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Привет! Я готов записывать твои личные финансы.")
@@ -177,15 +179,15 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END
 
-# ───────────── Entry Point & Webhook ────────────────────────────────────────
+# ───────────── Entry Point & Webhook ───────────────────────────────────────
 
 def main():
-    # 1) читаем из окружения
+    # читаем токен и URL из окружения
     TOKEN       = os.environ["TELEGRAM_TOKEN"]
-    WEBHOOK_URL = os.environ["WEBHOOK_URL"]
+    WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # https://.../webhook
 
-    # 2) создаём приложение и регистрируем ConversationHandler
     app = ApplicationBuilder().token(TOKEN).build()
+
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -196,19 +198,17 @@ def main():
             COMMENT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_comment)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        allow_reentry=True
+        allow_reentry=True,
     )
     app.add_handler(conv)
 
-    # 3) запускаем HTTP-сервер под webhook
+    # здесь именно url_path, а НЕ webhook_url_path
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", "8080")),
         url_path="/webhook",
-        webhook_url=WEBHOOK_URL
+        webhook_url=WEBHOOK_URL,
     )
 
 if __name__ == "__main__":
     main()
-
-#7377341728:AAGDTD6jNxqnPVg6m8hgPmsaSVh_XVScdXA
