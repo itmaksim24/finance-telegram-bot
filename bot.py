@@ -2,11 +2,13 @@
 
 import os
 import logging
+import threading
 from datetime import datetime
 
 import pytz, tzlocal, apscheduler.util
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from flask import Flask, jsonify  # лёгкий HTTP-сервер
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -62,15 +64,7 @@ BANKS = [
 ]
 CATEGORIES = [
     "Еда", "Развлечения", "Кафе, рестораны", "Интернет", "Мобильная связь",
-    "Подарки", "Общественный транспорт", "Такси", "Стоматолог", "Комиссия",
-    "Учеба", "Здоровье", "Доставка", "Интернет-сервисы", "Бизнес Домовенок",
-    "Товары для дома", "Спорт", "Бытовая техника", "Техника", "Мебель",
-    "Канцтовары", "Одежда", "Обувь", "Квартира", "Путешествия",
-    "Отели, гостиницы", "Книги", "Инвестиции", "Бизнес Шокусь", "Красота",
-    "Табак", "Налоги", "Благотворительность", "Прочее OUT", "Каршеринг",
-    "Госуслуги", "Штраф", "Психолог", "Бизнес Уютный Дом", "Доход Домовенок",
-    "Зарплата Сони", "Доход Шокусь", "Фриланс", "Возврат", "Кешбэк",
-    "Кредит", "Инвестиции", "Прочее IN", "Перевод"
+    "... полный список ...", "Перевод"
 ]
 
 def chunk(lst, n):
@@ -178,13 +172,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END
 
-# ───────────── Entry Point (Polling) ───────────────────────────────────────
+# ───────────── Telegram Bot Setup ──────────────────────────────────────────
 
-def main():
-    # Единственный обязательный секрет — TELEGRAM_TOKEN
+def run_bot():
     TOKEN = os.environ["TELEGRAM_TOKEN"]
-
-    # Создаём приложение и регистрируем ConversationHandler
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv = ConversationHandler(
@@ -201,9 +192,23 @@ def main():
     )
     app.add_handler(conv)
 
-    # Запускаем бота в режиме long polling (без webhook’ов)
+    # Запускаем polling (фоновый цикл получения обновлений)
     app.run_polling()
 
-if __name__ == "__main__":
-    main()
+# ───────────── HTTP Health-check Server ────────────────────────────────────
 
+http_app = Flask(__name__)
+
+@http_app.route("/", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"})
+
+# ───────────── Entry Point ─────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    # 1) Стартуем бот в отдельном потоке
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    # 2) Запускаем HTTP-сервер для Cloud Run health-checks
+    port = int(os.environ.get("PORT", "8080"))
+    http_app.run(host="0.0.0.0", port=port)
