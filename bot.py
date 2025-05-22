@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Google Sheets ───────────────────────────────────────────────
+# ───────────── Конфигурация Google Sheets ─────────────────────────────────
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME       = "Финансы"
 
@@ -51,7 +51,7 @@ def add_transaction(sheet, date, bank, category, amount, comment=""):
     sheet.append_row(row)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── ConversationHandler States ─────────────────────────────────
+# ───────────── Состояния ConversationHandler ──────────────────────────────
 DATE, BANK, CATEGORY, AMOUNT, COMMENT = range(5)
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -182,9 +182,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ───────────── Entry Point & Webhook ───────────────────────────────────────
 
 def main():
-    # читаем токен и URL из окружения
     TOKEN       = os.environ["TELEGRAM_TOKEN"]
-    WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # https://.../webhook
+    WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -202,7 +201,6 @@ def main():
     )
     app.add_handler(conv)
 
-    # здесь именно url_path, а НЕ webhook_url_path
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.environ.get("PORT", "8080")),
