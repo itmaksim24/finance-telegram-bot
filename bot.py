@@ -178,11 +178,13 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END
 
-# ───────────── Entry Point ─────────────────────────────────────────────────
+# ───────────── Entry Point (Polling) ───────────────────────────────────────
 
 def main():
+    # Единственный обязательный секрет — TELEGRAM_TOKEN
     TOKEN = os.environ["TELEGRAM_TOKEN"]
 
+    # Создаём приложение и регистрируем ConversationHandler
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv = ConversationHandler(
@@ -199,8 +201,9 @@ def main():
     )
     app.add_handler(conv)
 
-    # Запускаем long polling вместо webhook
+    # Запускаем бота в режиме long polling (без webhook’ов)
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
