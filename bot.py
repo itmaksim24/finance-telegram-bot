@@ -18,11 +18,11 @@ from telegram.ext import (
     filters,
 )
 
-# ─── Монкей-патч для tzlocal/APSscheduler ─────────────────────────────────
+# ─── «Монкей-патч» для tzlocal/APSscheduler ────────────────────────────────
 _LOCAL_TZ = pytz.timezone("Europe/Vienna")
-apscheduler.util.astimezone     = lambda obj=None, tz=None: _LOCAL_TZ
-apscheduler.util.get_localzone  = lambda: _LOCAL_TZ
-tzlocal.get_localzone           = lambda: _LOCAL_TZ
+apscheduler.util.astimezone    = lambda obj=None, tz=None: _LOCAL_TZ
+apscheduler.util.get_localzone = lambda: _LOCAL_TZ
+tzlocal.get_localzone          = lambda: _LOCAL_TZ
 # ────────────────────────────────────────────────────────────────────────────
 
 # ───────────── Логирование ─────────────────────────────────────────────────
@@ -51,7 +51,7 @@ def add_transaction(sheet, date, bank, category, amount, comment=""):
     sheet.append_row(row)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Состояния ConversationHandler ──────────────────────────────
+# ───────────── Conversation States ─────────────────────────────────────────
 DATE, BANK, CATEGORY, AMOUNT, COMMENT = range(5)
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -178,11 +178,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END
 
-# ───────────── Entry Point & Webhook ───────────────────────────────────────
+# ───────────── Entry Point ─────────────────────────────────────────────────
 
 def main():
-    TOKEN       = os.environ["TELEGRAM_TOKEN"]
-    WEBHOOK_URL = os.environ["WEBHOOK_URL"]
+    TOKEN = os.environ["TELEGRAM_TOKEN"]
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -200,12 +199,8 @@ def main():
     )
     app.add_handler(conv)
 
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", "8080")),
-        url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-    )
+    # Запускаем long polling вместо webhook
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
