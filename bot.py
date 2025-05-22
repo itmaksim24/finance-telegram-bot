@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-# ─── Монкей-патч для APScheduler и tzlocal ────────────────────────────────
+# ─── Монкей-патч для tzlocal/APSscheduler ─────────────────────────────────
 _LOCAL_TZ = pytz.timezone("Europe/Vienna")
 apscheduler.util.astimezone     = lambda obj=None, tz=None: _LOCAL_TZ
 apscheduler.util.get_localzone  = lambda: _LOCAL_TZ
@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
-# ───────────── Конфигурация Google Sheets ─────────────────────────────────
+# ───────────── Google Sheets ───────────────────────────────────────────────
 CREDENTIALS_FILE = "credentials.json"
 SHEET_NAME       = "Финансы"
 
@@ -60,7 +60,6 @@ BANKS = [
     "Тинькофф Соня", "Тинькофф кредитка Соня", "Озон Соня",
     "Сбер Соня", "Сбер Кредит Соня", "USDT", "USD"
 ]
-
 CATEGORIES = [
     "Еда", "Развлечения", "Кафе, рестораны", "Интернет", "Мобильная связь",
     "Подарки", "Общественный транспорт", "Такси", "Стоматолог", "Комиссия",
